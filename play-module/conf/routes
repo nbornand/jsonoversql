@@ -1,0 +1,5 @@
+#test comment
+GET /test           controllers.Application.index
+GET /assets/*file   controllers.Assets.at(path="/public", file)
+GET /mocks          controllers.MockGenerator.fillWithMock
+GET /:path          controllers.Application.get(path)

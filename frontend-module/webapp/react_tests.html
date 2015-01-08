@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>The Scala.js Tutorial</title>
+  </head>
+  <body>
+  
+  	<div id="content"></div>
+    <!-- Include Scala.js compiled code -->
+    <script type="text/javascript" src="react.js"></script>
+    <script type="text/javascript" src="./target/scala-2.11/scala-js-tutorial-fastopt.js"></script>
+    <!-- Run tutorial.webapp.TutorialApp -->
+    <script type="text/javascript">
+       react.prototype.MainApp().main();
+    </script>
+    <script type="text/javascript">
+     var CommentBox = React.createClass({displayName: 'CommentBox',
+    	  getInitialState: function() {
+    		    return {text: "tactac"};
+    		  },
+    	  render: function() {
+    	    return React.DOM.div(null, "independant div" + this.state.text)
+    	  }
+    	});
+    	var A =React.renderComponent(
+    	  CommentBox(null),
+    	  document.getElementById('content')
+    	);
+    	//react.prototype.MainApp().start()
+    </script>
+  </body>
+</html>

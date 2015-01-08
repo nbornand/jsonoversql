@@ -1,3 +1,0 @@
-#test comment
-GET /mocks controllers.MockGenerator.fillWithMock
-GET /:path controllers.Application.get(path)
