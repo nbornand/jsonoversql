@@ -12,7 +12,7 @@ object ApplicationBuild extends Build {
 
   //settings common to all projects
   val common = Seq(
-    scalaVersion := "2.11.2",
+    scalaVersion := "2.11.4",
     scalacOptions ++= Seq("-feature", "-deprecation")
   )
 
@@ -55,7 +55,7 @@ object ApplicationBuild extends Build {
 
   val scalajsOutputDir = Def.settingKey[File]("directory for javascript files output by scalajs")
 
-  val generateSql = taskKey[String]("A sample string task.")
+  //val generateSql = taskKey[String]("A sample string task.")
 
   lazy val frontend = (
     Project("frontend-module", file("frontend-module"))
@@ -64,7 +64,7 @@ object ApplicationBuild extends Build {
       settings(
       libraryDependencies ++= Seq(
         "org.scala-lang.modules.scalajs" %%%! "scalajs-dom" % "0.6",
-        "com.scalarx" %%%! "scalarx" % "0.2.5",
+        //"com.scalarx" %%%! "scalarx" % "0.2.5",
         "com.scalatags" %%%! "scalatags" % "0.4.2",
         Deps.upickle,
         Deps.scalaJsReact,
@@ -80,22 +80,22 @@ object ApplicationBuild extends Build {
 	  enablePlugins(PlayScala)
     settings(common: _*)
     settings(
-      generateSql := {
+      /*generateSql := {
         println("###################taskCompleted")
 
         val generated = baseDirectory.value / "app" / "controllers" / "Test.scala"
         IO.write(generated, """object Test extends App { println("Hi") }""")
         "Task done"
-      },
+      },*/
       //unmanagedResourceDirectories in Assets += (crossTarget in frontend).value,
       //compile in Compile <<= (compile in Compile) dependsOn generateSql,
       compile in Compile <<= (compile in Compile) dependsOn (fastOptJS in (frontend, Compile)),
       scalajsOutputDir := baseDirectory.value / "app" / "assets" / "js",
-      //playMonitoredFiles += (scalaSource in (frontend, Compile)).value.getCanonicalPath,
       libraryDependencies ++= Seq(
+        PlayImport.jdbc,
         "mysql" % "mysql-connector-java" % "5.1.12",
         "org.slf4j" % "slf4j-nop" % "1.6.4",
-        "com.h2database" % "h2" % "1.3.175",
+        //"com.h2database" % "h2" % "1.3.175",
         "org.scala-lang" % "scala-reflect" % scalaVersion.value,
         "javax.validation" % "validation-api" % "1.0.0.GA",
         Deps.autowireJVM

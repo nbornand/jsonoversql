@@ -3470,11 +3470,6 @@ ScalaJS.c.LStream.prototype.emit__O__V = (function(v) {
     i = ((i + 1) | 0)
   }
 });
-ScalaJS.c.LStream.prototype.assign__LStream__V = (function(other) {
-  ScalaJS.uI(this.observers$1["push"](new ScalaJS.c.LObserver().init___F1__LStream(new ScalaJS.c.sjsr_AnonFunction1().init___sjs_js_Function1((function(x$2) {
-    return x$2
-  })), other)))
-});
 ScalaJS.c.LStream.prototype.init___F1 = (function(f) {
   this.f$1 = f;
   var this$2 = ScalaJS.m.s_Console();
@@ -16269,7 +16264,8 @@ ScalaJS.c.LTest$$anonfun$render$2.prototype.apply__O__O = (function(v1) {
   x$3.map__F1__LStream(new ScalaJS.c.sjsr_AnonFunction1().init___sjs_js_Function1((function(e$2) {
     var e = e$2;
     return ScalaJS.as.T(e["target"]["value"])
-  }))).assign__LStream__V(this.$$outer$2.Test$$color$2)
+  })));
+  this.$$outer$2.Test$$color$2
 });
 ScalaJS.c.LTest$$anonfun$render$2.prototype.init___LTest = (function($$outer) {
   if (($$outer === null)) {

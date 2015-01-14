@@ -11,7 +11,6 @@ import org.scalajs.dom.HTMLInputElement
 import scala.scalajs.js.RegExp
 import org.scalajs.dom.HTMLElement
 import js.Dynamic.{ global => g }
-import rx._
 import scala.collection.mutable.ArrayBuffer
 import upickle._
 import autowire._

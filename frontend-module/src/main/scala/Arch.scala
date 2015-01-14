@@ -10,7 +10,7 @@ import scala.scalajs.js.RegExp
 import org.scalajs.dom.HTMLElement
 import Dom._
 import js.Dynamic.{ global => g }
-import rx._
+//import rx._
 import scala.collection.mutable.ArrayBuffer
 
 object MainApp extends JSApp {
@@ -137,7 +137,7 @@ class Stream[V](val f:V=>Boolean = (x:V) => true){
     observers.push(new Observer(f))
   }
   def assign(other:Stream[V]){
-    observers.push(new Observer(x => x, other))
+    //observers.push(new Observer(x => x, other))
   }
   def emit(v:V): Unit = {
     observers.foreach(observer => if(f(v)) observer.newValue(v))
@@ -148,7 +148,7 @@ class Stream[V](val f:V=>Boolean = (x:V) => true){
   }
   def filter(f: V => Boolean) : Stream[V] = {
     val dest = new Stream[V](f);
-    observers.push(new Observer(x => x, dest))
+    //observers.push(new Observer(x => x, dest))
     dest
   }
   def onChange(f: V => Unit) = {

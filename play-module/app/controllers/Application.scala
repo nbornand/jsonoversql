@@ -11,7 +11,6 @@ object Application extends Controller{
   }
 
   def get(path:String) = Action {
-    RestDefault.run2();
     val tree = Json.parse("""{"a":"test", "b":12}""")
 
     RestDefault.post(path, tree)

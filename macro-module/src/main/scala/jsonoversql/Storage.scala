@@ -99,7 +99,11 @@ case object Storage{
     tpe.members.collectFirst {
       case m: MethodSymbol if m.isPrimaryConstructor => println(m.paramLists)
     }
-    //Entity.fromType(tpe)
+
+    //from type end
+
+    //from type end
+
 
     val tableName = tpe.toString.toLowerCase+"s"
 
@@ -117,6 +121,7 @@ case object Storage{
 object Request{
   def all[T](implicit t:WeakTypeTag[T]) = {
     val table = t.tpe.toString.toLowerCase+"s"
+    Entity.fromType(t.tpe)
     BasicRequest[T]("", table, Nil)
   }
 }

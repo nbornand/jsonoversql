@@ -34,8 +34,10 @@ object RequestBuilder {
     Entity.register[Person]
 
     val schemas = Entity.buildSchemas
-    val personSchema = schemas.getFor[Person].get
+    val personSchema = schemas.getFor[Course].get
     println(personSchema.create)
     println(personSchema.select)
+
+
   }
 }
