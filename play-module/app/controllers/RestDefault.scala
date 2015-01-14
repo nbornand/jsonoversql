@@ -40,7 +40,7 @@ object RestDefault extends Controller{
       }
   }
 
-	def run() {
+	def get() {
 
 	    getConnection match {
         case connection:Connection => {

@@ -1,10 +1,10 @@
 package utils.jsonoversql
 
-import scala.reflect.macros.blackbox.Context
-import scala.reflect.runtime.universe._
 import scala.reflect.macros._
+import scala.reflect.runtime.universe._
 import javax.validation.constraints._
 import scala.language.experimental.macros
+import scala.reflect.macros.blackbox.Context
 
 case class Entity(tpe:Type, localFields:List[Field], joins:List[Relation], deps:Int=0)
 case class Field(name:String, tpe:Type, referTo:Option[Type] = None, regexp:Option[String] = None)
@@ -17,6 +17,12 @@ sealed trait Relation{
 
 case class OneTo(name:String, from:Type, to:Type) extends Relation
 case class ManyTo(name:String, from:Type, to:Type) extends Relation
+case class Schemas(all:Map[Type, PreparedSQL]){
+  def getFor[T:TypeTag] = {
+    val typeTag = typeOf[T]
+    all.get(typeTag)
+  }
+}
 
 /*
  * Schema classes
@@ -38,8 +44,21 @@ object Entity{
   private val m = Map[String, Option[Int] => String](
     "String" -> (i => s"varchar(${i.getOrElse(255)})"),
     "scala.Int" -> (i => s"int(${i.getOrElse(11)})"),
-    "Int" -> (i => s"int(${i.getOrElse(11)})")
+    "Int" -> (i => s"int(${i.getOrElse(11)})"),
+    "scala.Boolean" -> (i => "boolean")
   )
+
+
+  private val registeredTypes = scala.collection.mutable.Set[Type]()
+
+  def register[T:TypeTag]{
+    val typeTag = typeOf[T]
+    registeredTypes.add(typeTag)
+  }
+  def buildSchemas = {
+    val entities  = Entity.buildEntities(registeredTypes.toList:_*)
+    Schemas(entities.map{ case (tpe,entity) => (tpe, Storage.prepare(entity))})
+  }
 
   private def nameOf(t:Type):String = t.typeSymbol.name.toString.toLowerCase
 

@@ -33,6 +33,11 @@ object ApplicationBuild extends Build {
   lazy val test = (
     Project("macro-test", file("macro-test"))
       settings(common: _*)
+      settings(
+        libraryDependencies ++= Seq(
+          "com.scalatags" %% "scalatags" % "0.4.2"
+        )
+      )
       dependsOn(macro)
     )
 
@@ -42,7 +47,8 @@ object ApplicationBuild extends Build {
     settings(
       libraryDependencies ++= Seq(
         "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-        "com.typesafe.play" %% "play-json" % "2.3.4"
+        "com.typesafe.play" %% "play-json" % "2.3.4",
+        "com.scalatags" %% "scalatags" % "0.4.2"
       )
     )
   )
