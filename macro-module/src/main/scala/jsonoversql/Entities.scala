@@ -1,7 +1,6 @@
 package utils.jsonoversql
 
 import scala.collection.mutable.ListBuffer
-import scala.reflect.macros._
 import javax.validation.constraints._
 import scala.reflect.runtime.universe._
 import scala.reflect.macros.blackbox.Context
@@ -161,7 +160,8 @@ object Entity{
   def implBuild(c: Context): c.Expr[Schemas] = {
     import c.universe._
 
-    implicit val lift = Liftable[PreparedSQL]{ s => q"PreparedSQL(${s.create}, ${s.select})"}
+    implicit val liftPrepared = Liftable[PreparedSQL]{ s => q"PreparedSQL(${s.create}, ${s.select})"}
+    implicit val liftCriteria = Liftable[CriteriaServer]{ c => q"CriteriaServer(${c.id}, ${c.sql})"}
 
     val entitiesWithoutRelations = registeredEntities.map(entity => (entity.tpe, entity)).toMap
     val relations = relationsBuffer.toList
@@ -179,9 +179,9 @@ object Entity{
 
     val res = addRelations(entitiesWithoutRelations, relations.toList)
     val preparedQueries = res.map{ case (tpe, entity) => (tpe, Storage.prepare(entity)) }
-    val (tpes, queries) = preparedQueries.unzip
+    val (tpes, preparedSqls) = preparedQueries.unzip
 
-    c.Expr[Schemas](q"Schemas(${tpes.toList}, ${queries.toList})")
+    c.Expr[Schemas](q"Schemas(${tpes.toList}, ${preparedSqls.toList}, ${Criteria.queries.toList})")
   }
 
 }

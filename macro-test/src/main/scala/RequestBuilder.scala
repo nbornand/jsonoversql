@@ -20,15 +20,17 @@ object RequestBuilder {
     println(req.fullUrl)
     println(req.dataToSend)
 
-
     Entity.register[Person]
     Entity.register[Course]
     val schemas = Entity.buildSchemas
 
+    val person = schemas.forServer[Person]
+    println(person.create)
+    println(person.select)
+
     val personSchema = Schemas.forClient[Person](schemas)
 
-    /*val personSchema = schemas.getFor[Course].get
-    println(personSchema.create)
-    println(personSchema.select)*/
+    println(schemas.materializeFilter(req.fullUrl))
+
   }
 }

@@ -84,7 +84,6 @@ case object Storage{
       val entities = Entity.getEntities
       implicit val lift = Liftable[Storage]{ s => q"Storage.Storage(${s.select})"}
       val list =  entities.values.map(e => (e.tpe.toString, Storage(selectQuery(e, entities))) )
-      println(list)
       q"Map(..$list)"
   }
 
@@ -96,14 +95,6 @@ case object Storage{
     val selected = scala.collection.mutable.ListBuffer[Tree]()
 
     val tpe = weakType.tpe
-    tpe.members.collectFirst {
-      case m: MethodSymbol if m.isPrimaryConstructor => println(m.paramLists)
-    }
-
-    //from type end
-
-    //from type end
-
 
     val tableName = tpe.toString.toLowerCase+"s"
 
@@ -117,31 +108,8 @@ case object Storage{
   }
 }
 
-object Request{
-  def all[T](implicit t:WeakTypeTag[T]) = {
-    val table = t.tpe.toString.toLowerCase+"s"
-    Entity.fromType(t.tpe)
-    BasicRequest[T]("", table, Nil)
-  }
-}
-trait RequestSeed[T]{
-  def all:BasicRequest[T]
-}
-trait Request[T]{
-  def url:String
-  def entityName:String
-  def dataToSend:List[Any]
-}
-case class BasicRequest[T](url: String, entityName:String, dataToSend:List[Any]) extends Request[T]{
-  def where(p:Criteria[T]) = WhereRequest[T](url+p.id, entityName, dataToSend ::: p.toSend())
-}
-case class WhereRequest[T](url: String, entityName:String, dataToSend:List[Any]) extends Request[T]{
-  def and(p:Criteria[T]) = WhereRequest[T](s"${url}/and/${p.id}", entityName, dataToSend ::: p.toSend())
-  def or(p:Criteria[T]) = WhereRequest[T](s"${url}/or/${p.id}", entityName, dataToSend ::: p.toSend())
-  def fullUrl: String = s"$entityName/filter/"+url
-}
-
-case class Criteria[+T](sql:String, id:Int, toSend: () => List[Any] = () => List[Any]())
+case class CriteriaClient[+T](sql:String, id:Int, toSend: () => List[Any] = () => List[Any]())
+case class CriteriaServer(id:Int, sql:String)
 
 case object Criteria{
 
@@ -151,11 +119,11 @@ case object Criteria{
    */
   var counter = 1;
 
-  private val queries = scala.collection.mutable.Map[String, Criteria[Any]]()
+  val queries = scala.collection.mutable.ListBuffer[CriteriaServer]()
 
-  def build[T](f:(T=>Boolean)): Criteria[T] = macro implBuildCriteria[T]
+  def build[T](f:(T=>Boolean)): CriteriaClient[T] = macro implBuildCriteria[T]
 
-  def implBuildCriteria[T](c: Context)(f:c.Expr[T => Boolean])(implicit weakType: c.WeakTypeTag[T]): c.Expr[Criteria[T]] = {
+  def implBuildCriteria[T](c: Context)(f:c.Expr[T => Boolean])(implicit weakType: c.WeakTypeTag[T]): c.Expr[CriteriaClient[T]] = {
     import c.universe._
 
     val selected = scala.collection.mutable.ListBuffer[Tree]()
@@ -166,10 +134,18 @@ case object Criteria{
 
 
     def toSQL(t:Tree):String = t match{
-      case Apply(Select(target, func), args) => {
+      case Apply(Select(target, func), Nil) => {
         val left = toSQL(target)
-        //TODO not only head
-        val right = toSQL(args.head)
+        func.toString match{
+          case "toString" => s"$left"
+          case other => {
+            throw new UnsupportedOperationException(s"$other not supported for scala => SQL conversion")
+          }
+        }
+      }
+      case Apply(Select(target, func), first :: rest) => {
+        val left = toSQL(target)
+        val right = toSQL(first)
         func.toString match{
           // => Boolean operators
           case "$eq$eq" => s"""$left = $right"""
@@ -187,6 +163,7 @@ case object Criteria{
         }
       }
       case s @ Select(Ident(obj), field) => {
+        println(obj)
         s"$tableName."+field.toString
       }
       case Literal(Constant(value)) => value.toString
@@ -204,10 +181,9 @@ case object Criteria{
         val uid = java.util.UUID.randomUUID.toString
 
         val toSend = c.Expr[() => List[Any]](q"() => List(..${selected.toList})")
-        val res = c.Expr[Criteria[T]](q""" Criteria[$tpe]($sqlSnippet, $counter, $toSend) """)
+        val res = c.Expr[CriteriaClient[T]](q""" CriteriaClient[$tpe]($sqlSnippet, $counter, $toSend) """)
 
-        /*val v = c.eval[() => List[Any]](toSend)
-        var test = Criteria[T](sqlSnippet, counter, v)*/
+        queries.append(CriteriaServer(counter, sqlSnippet))
 
         counter += 1;
         res
@@ -215,7 +191,6 @@ case object Criteria{
       case _ => sys.exit(1)
     }
 
-    //queries += ((tpe.toString, c.eval[Criteria[T]](criteria)))
     criteria
   }
 
