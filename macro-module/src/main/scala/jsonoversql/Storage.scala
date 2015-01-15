@@ -23,25 +23,25 @@ case object Storage{
     "scala.Boolean" -> (i => "boolean")
   )
 
-  def nameOf(t:Type):String = t.typeSymbol.name.toString.toLowerCase
+  def nameOf(t:String):String = t.toLowerCase
 
   def createTableQueries(entity:Entity): String = {
 
     val columns = "`id` int(11) NOT NULL auto_increment" :: "PRIMARY KEY (`id`)" ::
       entity.localFields.map( field => {
         val sqlType = m.get(field.tpe.toString).getOrElse(throw new Exception(s"Undefined mapping for type ${field.tpe}"))(None)
-        s"`${field.name}` $sqlType ${field.referTo.map(foreign => s" REFERENCES ${nameOf(foreign)}s(id)").mkString}"
+        s"`${field.name}` $sqlType ${field.referTo.map(foreign => s" REFERENCES ${nameOf(foreign.toString)}s(id)").mkString}"
     })
 
     val sql = s"CREATE TABLE IF NOT EXISTS `${nameOf(entity.tpe)}s`(${columns.mkString(",")})ENGINE=INNODB;"
     sql
   }
 
-  def selectQuery(target:Entity, allEntities:Map[Type,Entity]):String = {
-    val entitiesToJoin = mutable.Set[Type]();
+  def selectQuery(target:Entity, allEntities:Map[String,Entity]):String = {
+    val entitiesToJoin = mutable.Set[String]();
     val jsonConcatenation = jsonForEntity(target, allEntities, 1, entitiesToJoin)
     val groupBy = entitiesToJoin.map(
-      foreign => s"LEFT JOIN ${nameOf(foreign)}s ON ${nameOf(target.tpe)}s.id=${nameOf(foreign)}s.${nameOf(target.tpe)}_id"
+      foreign => s"LEFT JOIN ${nameOf(foreign.toString)}s ON ${nameOf(target.tpe)}s.id=${nameOf(foreign.toString)}s.${nameOf(target.tpe)}_id"
     ).mkString(" ")
     s"SELECT $jsonConcatenation as json FROM ${nameOf(target.tpe)}s $groupBy"
   }
@@ -58,15 +58,15 @@ case object Storage{
     s"INSERT INTO ${nameOf(target.tpe)}s (${fields.mkString(",")}) VALUES (${values.mkString(",")})"
   }
 
-  private def jsonForEntity(target:Entity, allEntities:Map[Type,Entity], depth:Int, groupBy:mutable.Set[Type]):String = {
+  private def jsonForEntity(target:Entity, allEntities:Map[String,Entity], depth:Int, groupBy:mutable.Set[String]):String = {
     val components = target.localFields.map {
       field => "'\"" + field.name + "\":\'," + nameOf(target.tpe) + s"s.${field.name}"
     } ::: {
       if(depth>0) {
         target.joins.map({
           case OneTo(name, from, to) => {
-            val otherEntity = allEntities(to)
-            groupBy += to
+            val otherEntity = allEntities(to.toString)
+            groupBy += to.toString
             "'\""+name+"\":\'," + jsonForEntity(otherEntity, allEntities, depth-1, groupBy)
           }
           case ManyTo(tpe, from, to) => "''"
@@ -107,7 +107,6 @@ case object Storage{
 
     val tableName = tpe.toString.toLowerCase+"s"
 
-    val ret = ""
     c.Expr[BasicRequest[T]](q"""BasicRequest[$tpe]("", $tableName, Nil)""")
   }
 
@@ -125,8 +124,10 @@ object Request{
     BasicRequest[T]("", table, Nil)
   }
 }
+trait RequestSeed[T]{
+  def all:BasicRequest[T]
+}
 trait Request[T]{
-  //def preds:Seq[Criteria[T]]
   def url:String
   def entityName:String
   def dataToSend:List[Any]
@@ -140,7 +141,7 @@ case class WhereRequest[T](url: String, entityName:String, dataToSend:List[Any])
   def fullUrl: String = s"$entityName/filter/"+url
 }
 
-case class Criteria[T](sql:String, id:Int, toSend: () => List[Any] = () => List[Any]())
+case class Criteria[+T](sql:String, id:Int, toSend: () => List[Any] = () => List[Any]())
 
 case object Criteria{
 
@@ -150,11 +151,11 @@ case object Criteria{
    */
   var counter = 1;
 
-  private val queries = scala.collection.mutable.Map[String,String]()
+  private val queries = scala.collection.mutable.Map[String, Criteria[Any]]()
 
   def build[T](f:(T=>Boolean)): Criteria[T] = macro implBuildCriteria[T]
 
-  def implBuildCriteria[T](c: Context)(f:c.Expr[T => Boolean])(implicit weakType: c.WeakTypeTag[T]): c.Expr[T] = {
+  def implBuildCriteria[T](c: Context)(f:c.Expr[T => Boolean])(implicit weakType: c.WeakTypeTag[T]): c.Expr[Criteria[T]] = {
     import c.universe._
 
     val selected = scala.collection.mutable.ListBuffer[Tree]()
@@ -202,14 +203,19 @@ case object Criteria{
         appendSqlToFile("name#"+counter, counter, sqlSnippet)
         val uid = java.util.UUID.randomUUID.toString
 
-        val toSend = q"() => List(..${selected.toList})"
-        val res= c.Expr(q""" Criteria[$tpe]($sqlSnippet, $counter, $toSend) """)
+        val toSend = c.Expr[() => List[Any]](q"() => List(..${selected.toList})")
+        val res = c.Expr[Criteria[T]](q""" Criteria[$tpe]($sqlSnippet, $counter, $toSend) """)
+
+        /*val v = c.eval[() => List[Any]](toSend)
+        var test = Criteria[T](sqlSnippet, counter, v)*/
+
         counter += 1;
         res
       }
       case _ => sys.exit(1)
     }
 
+    //queries += ((tpe.toString, c.eval[Criteria[T]](criteria)))
     criteria
   }
 

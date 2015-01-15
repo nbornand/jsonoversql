@@ -1,28 +1,25 @@
 package utils.jsonoversql
 
+import scala.collection.mutable.ListBuffer
 import scala.reflect.macros._
-import scala.reflect.runtime.universe._
 import javax.validation.constraints._
+import scala.reflect.runtime.universe._
+import scala.reflect.macros.blackbox.Context
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox.Context
 
-case class Entity(tpe:Type, localFields:List[Field], joins:List[Relation], deps:Int=0)
-case class Field(name:String, tpe:Type, referTo:Option[Type] = None, regexp:Option[String] = None)
+case class Entity(tpe:String, localFields:List[Field], joins:List[Relation], deps:Int=0)
+case class Field(name:String, tpe:String, referTo:Option[String] = None, regexp:Option[String] = None)
+case class Void(s:String)
 
 sealed trait Relation{
   def name:String
-  def from:Type
-  def to:Type
+  def from:String
+  def to:String
 }
 
-case class OneTo(name:String, from:Type, to:Type) extends Relation
-case class ManyTo(name:String, from:Type, to:Type) extends Relation
-case class Schemas(all:Map[Type, PreparedSQL]){
-  def getFor[T:TypeTag] = {
-    val typeTag = typeOf[T]
-    all.get(typeTag)
-  }
-}
+case class OneTo(name:String, from:String, to:String) extends Relation
+case class ManyTo(name:String, from:String, to:String) extends Relation
 
 /*
  * Schema classes
@@ -48,18 +45,7 @@ object Entity{
     "scala.Boolean" -> (i => "boolean")
   )
 
-  private val registeredTypes = scala.collection.mutable.Set[Type]()
-
-  def register[T:TypeTag]{
-    val typeTag = typeOf[T]
-    registeredTypes.add(typeTag)
-  }
-  def buildSchemas = {
-    val entities  = Entity.buildEntities(registeredTypes.toList:_*)
-    Schemas(entities.map{ case (tpe,entity) => (tpe, Storage.prepare(entity))})
-  }
-
-  private def nameOf(t:Type):String = t.typeSymbol.name.toString.toLowerCase
+  private def nameOf(t:String):String = t.toLowerCase
 
   /**
    * Split the fields of an entity into lists of local field and relations
@@ -78,8 +64,8 @@ object Entity{
     })
 
     val (manyTo, oneTo) = references.partition( s => s.typeSignature <:< typeOf[List[_]] )
-    val onePlusMany:List[Relation] = oneTo.map(t => OneTo(t.name.toString, tpe, t.typeSignature)) :::
-      manyTo.map(t => ManyTo(t.name.toString, tpe, t.typeSignature.typeArgs.head))
+    val onePlusMany:List[Relation] = oneTo.map(t => OneTo(t.name.toString, tpe.toString, t.typeSignature.toString)) :::
+      manyTo.map(t => ManyTo(t.name.toString, tpe.toString, t.typeSignature.typeArgs.head.toString))
 
     val simples:List[Field] = simpleTypes.map(t => {
 
@@ -88,16 +74,16 @@ object Entity{
         case a => a.tree.children.tail.collectFirst{case t => t.children.tail.head.toString}.get
       }
 
-      Field(t.name.toString, t.typeSignature, None, pattern)
+      Field(t.name.toString, t.typeSignature.toString, None, pattern)
     })
 
     (
-      Entity(tpe, simples, onePlusMany),
+      Entity(tpe.toString, simples, onePlusMany),
       onePlusMany
       )
   }
 
-  private def buildEntities(types:Type*): Map[Type, Entity] = {
+  private def buildEntities(types:Type*): Map[String, Entity] = {
 
     def getTypeParams(tpe: Type): List[Symbol] = {
       val constructor = tpe.members.collectFirst {
@@ -110,12 +96,12 @@ object Entity{
     val entitiesWithoutRelations = entitiesT.map(entity => (entity.tpe, entity)).toMap
     val relations = relationsT.flatten
 
-    def addRelations(entities: Map[Type, Entity], relations: List[Relation]): Map[Type, Entity] = relations match {
+    def addRelations(entities: Map[String, Entity], relations: List[Relation]): Map[String, Entity] = relations match {
       case Nil => entities
       case first :: others => {
-        val foreign = entities.get(first.to).getOrElse(throw new Exception(""))
-        val extraField = Field(nameOf(first.from)+"_id", typeOf[scala.Int], Some(first.from))
-        addRelations(entities + (first.to -> Entity(foreign.tpe, extraField :: foreign.localFields,foreign.joins, foreign.deps+1)), others)
+        val foreign = entities.get(first.to.toString).getOrElse(throw new Exception(""))
+        val extraField = Field(nameOf(first.from.toString)+"_id", typeOf[scala.Int].toString, Some(first.from.toString))
+        addRelations(entities + (first.to.toString -> Entity(foreign.tpe, extraField :: foreign.localFields,foreign.joins, foreign.deps+1)), others)
       }
     }
 
@@ -128,135 +114,74 @@ object Entity{
   def getEntities = entities
 
   /**
-   * Macro
-   * @param f
-   * @tparam T
-   * @return
+   * Register types => entities
    */
+  private val registeredEntities = ListBuffer[Entity]()
+  private val relationsBuffer = ListBuffer[Relation]()
 
-  def build[T](f:(Entity=>T)): Map[String,T] = macro impl[T]
+  def register[T]: Unit = macro implRegisterType[T]
 
-  def impl[T: c.WeakTypeTag](c: Context)(f:c.Expr[Entity=>T]) = {
+  def implRegisterType[T](c: Context)(implicit weakType: c.WeakTypeTag[T]): c.Expr[Unit] = {
     import c.universe._
-    val all = Entity.getEntities
-    val list = all.values.toList.map(e => (e.tpe.toString, Storage.selectQuery(e,all)))
-    //val list = all.values.toList.map(f.splice)
-    //println(all.values.toList.map(f))
-    q"Map(..$list)"
+
+    val tpe = weakTypeTag[T].tpe
+
+    val constructor = tpe.members.collectFirst {
+      case m: MethodSymbol if m.isPrimaryConstructor => m
+    }
+    val params = constructor.head.paramLists.head
+
+    val (simpleTypes, references) = params.partition( s => {
+      m.contains(s.typeSignature.toString)
+    })
+
+    val (manyTo, oneTo) = references.partition( s => s.typeSignature <:< typeOf[List[_]] )
+    val onePlusMany:List[Relation] = oneTo.map(t => OneTo(t.name.toString, tpe.toString, t.typeSignature.toString)) :::
+      manyTo.map(t => ManyTo(t.name.toString, tpe.toString, t.typeSignature.typeArgs.head.toString))
+
+    val simples:List[Field] = simpleTypes.map(t => {
+
+      //val pattern = t.annotations.collectFirst{case a => a.javaArgs.contains(newTermName("regexp"))}
+      val pattern = t.annotations.collectFirst{
+        case a => a.tree.children.tail.collectFirst{case t => t.children.tail.head.toString}.get
+      }
+
+      Field(t.name.toString, t.typeSignature.toString, None, pattern)
+    })
+
+    registeredEntities.append(Entity(tpe.toString, simples, onePlusMany))
+    relationsBuffer.append(onePlusMany:_*)
+
+    c.Expr[Unit](q"()")
+  }
+
+
+  def buildSchemas: Schemas = macro implBuild
+
+  def implBuild(c: Context): c.Expr[Schemas] = {
+    import c.universe._
+
+    implicit val lift = Liftable[PreparedSQL]{ s => q"PreparedSQL(${s.create}, ${s.select})"}
+
+    val entitiesWithoutRelations = registeredEntities.map(entity => (entity.tpe, entity)).toMap
+    val relations = relationsBuffer.toList
+
+    def addRelations(entities: Map[String, Entity], relations: List[Relation]): Map[String, Entity] = relations match {
+      case Nil => entities
+      case first :: others => {
+        val foreign = entities.get(first.to.toString).getOrElse{
+          throw new Exception(s"Entity ${first.from} refer to ${first.to} but it couldn't be found. Maybe you have forgotten to use Entity.register[${first.to}]")
+        }
+        val extraField = Field(nameOf(first.from.toString)+"_id", typeOf[scala.Int].toString, Some(first.from.toString))
+        addRelations(entities + (first.to.toString -> Entity(foreign.tpe, extraField :: foreign.localFields,foreign.joins, foreign.deps+1)), others)
+      }
+    }
+
+    val res = addRelations(entitiesWithoutRelations, relations.toList)
+    val preparedQueries = res.map{ case (tpe, entity) => (tpe, Storage.prepare(entity)) }
+    val (tpes, queries) = preparedQueries.unzip
+
+    c.Expr[Schemas](q"Schemas(${tpes.toList}, ${queries.toList})")
   }
 
 }
-
-/*object EntityMacro{
-
-  private val m = Map[String, Option[Int] => String](
-    "String" -> (i => s"varchar(${i.getOrElse(255)})"),
-    "scala.Int" -> (i => s"int(${i.getOrElse(11)})"),
-    "Int" -> (i => s"int(${i.getOrElse(11)})"),
-    "scala.Boolean" -> (i => "boolean")
-  )
-
-
-  private val registeredTypes = scala.collection.mutable.Set[Type]()
-
-  def register[T]: List[Boolean] = macro implRegister[T]
-
-  def implRegister[T](c: Context)(implicit weakType: c.WeakTypeTag[T]): c.Expr[List[Boolean]] = {
-    //registeredTypes.add(typeTag)
-    println("registered : "+weakType.tpe.toString)
-    val b = List[Boolean]();
-    q"List(..$b)"
-  }
-
-  def buildSchemas = {
-    val entities  = buildEntities(registeredTypes.toList:_*)
-    Schemas(entities.map{ case (tpe,entity) => (tpe, Storage.prepare(entity))})
-  }
-
-  private def nameOf(t:Type):String = t.typeSymbol.name.toString.toLowerCase
-
-  /**
-   * Split the fields of an entity into lists of local field and relations
-   * @param tpe a case class corresponding to an entity
-   * @return (simple fields, relations)
-   */
-  def fromType(tpe:Type): (Entity, List[Relation]) = {
-
-    val constructor = tpe.members.collectFirst {
-      case m: MethodSymbol if m.isPrimaryConstructor => m
-    }
-    val params = constructor.head.paramLists.head
-
-    val (simpleTypes, references) = params.partition( s => {
-      m.contains(s.typeSignature.toString)
-    })
-
-    val (manyTo, oneTo) = references.partition( s => s.typeSignature <:< typeOf[List[_]] )
-    val onePlusMany:List[Relation] = oneTo.map(t => OneTo(t.name.toString, tpe, t.typeSignature)) :::
-      manyTo.map(t => ManyTo(t.name.toString, tpe, t.typeSignature.typeArgs.head))
-
-    val simples:List[Field] = simpleTypes.map(t => {
-
-      //val pattern = t.annotations.collectFirst{case a => a.javaArgs.contains(newTermName("regexp"))}
-      val pattern = t.annotations.collectFirst{
-        case a => a.tree.children.tail.collectFirst{case t => t.children.tail.head.toString}.get
-      }
-
-      Field(t.name.toString, t.typeSignature, None, pattern)
-    })
-
-    (
-      Entity(tpe, simples, onePlusMany),
-      onePlusMany
-      )
-  }
-
-  private def buildEntities(types:Type*): Map[Type, Entity] = {
-
-    def getTypeParams(tpe: Type): List[Symbol] = {
-      val constructor = tpe.members.collectFirst {
-        case m: MethodSymbol if m.isPrimaryConstructor => m
-      }
-      constructor.head.paramLists.head
-    }
-
-    val (entitiesT, relationsT) = types.map(entityType => fromType(entityType)).unzip
-    val entitiesWithoutRelations = entitiesT.map(entity => (entity.tpe, entity)).toMap
-    val relations = relationsT.flatten
-
-    def addRelations(entities: Map[Type, Entity], relations: List[Relation]): Map[Type, Entity] = relations match {
-      case Nil => entities
-      case first :: others => {
-        val foreign = entities.get(first.to).getOrElse(throw new Exception(""))
-        val extraField = Field(nameOf(first.from)+"_id", typeOf[scala.Int], Some(first.from))
-        addRelations(entities + (first.to -> Entity(foreign.tpe, extraField :: foreign.localFields,foreign.joins, foreign.deps+1)), others)
-      }
-    }
-
-    addRelations(entitiesWithoutRelations, relations.toList)
-  }
-
-
-  private val entities =  buildEntities(weakTypeOf[Dummy], weakTypeOf[Dummy2], weakTypeOf[C])
-
-  def getEntities = entities
-
-  /**
-   * Macro
-   * @param f
-   * @tparam T
-   * @return
-   */
-
-  def build[T](f:(Entity=>T)): Map[String,T] = macro impl[T]
-
-  def impl[T: c.WeakTypeTag](c: Context)(f:c.Expr[Entity=>T]) = {
-    import c.universe._
-    val all = Entity.getEntities
-    val list = all.values.toList.map(e => (e.tpe.toString, Storage.selectQuery(e,all)))
-    //val list = all.values.toList.map(f.splice)
-    //println(all.values.toList.map(f))
-    q"Map(..$list)"
-  }
-
-}*/

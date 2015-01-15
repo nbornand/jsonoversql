@@ -16,28 +16,19 @@ object RequestBuilder {
       Criteria.build[Person](s => s.first == name || s.surname.matches(short))
     }
 
-    val (entity, relations) = Entity.fromType(typeOf[Person])
-    val sql = Storage.prepare(entity)
-    println(sql.create)
-
     val req = Storage.all[Person].where(nameMatches("nicolas")).and(isAdult)
     println(req.fullUrl)
     println(req.dataToSend)
 
-    val s = div(
-        h1(id:="title", "Title"),
-        p("random text")
-      )
-    println(s.render)
 
-    Entity.register[Course]
     Entity.register[Person]
-
+    Entity.register[Course]
     val schemas = Entity.buildSchemas
-    val personSchema = schemas.getFor[Course].get
+
+    val personSchema = Schemas.forClient[Person](schemas)
+
+    /*val personSchema = schemas.getFor[Course].get
     println(personSchema.create)
-    println(personSchema.select)
-
-
+    println(personSchema.select)*/
   }
 }

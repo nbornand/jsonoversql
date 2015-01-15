@@ -5,22 +5,13 @@ import scala.scalajs.js.JSApp
 import org.scalajs._
 import dom.document
 import js.annotation._
-import org.scalajs.dom.Window
-import scala.scalajs.js.ThisFunction
-import org.scalajs.dom.HTMLInputElement
-import scala.scalajs.js.RegExp
-import org.scalajs.dom.HTMLElement
+
 import js.Dynamic.{ global => g }
 import scala.collection.mutable.ArrayBuffer
 import upickle._
 import autowire._
 import scala.language.implicitConversions
 import scalatags.Text.all._
-import utils.jsonoversql._
-/*import japgolly.scalajs.react._
-import vdom.ReactVDom._
-import vdom.ReactVDom.all._*/
-
 
 case class PickleTest(name:String, age:Int)
 case class A(i:Int)
@@ -33,10 +24,6 @@ object MainApp extends JSApp {
     println(read[PickleTest](s"""${write(PickleTest("nico",19))}"""))
 
     case class Person(name:String, age:Int)
-    //println(write(Person("nico",21)))
-    //var full = Criteria.select[Person](s => (s.name,"baba"))(s => s.age == 21 && s.name.startsWith("t"))
-
-    //println("query : "+full(Person("test",20)))
 
     val frag = div(
         h1("This is my title"),
